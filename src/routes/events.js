@@ -1,7 +1,8 @@
 import express from "express";
 import Event from "../models/Event.js";
 import { google } from "googleapis";
-import { oAuth2Client } from "../utils/GoogleApi.js";
+import { oAuth2Client } from "../utils/googleApi.js";
+
 
 const router = express.Router();
 
