@@ -1,13 +1,7 @@
 import { google } from "googleapis";
 import dotenv from "dotenv";
 
-dotenv.config();
-
-console.log("Google Config:", {
-  clientId: process.env.GOOGLE_CLIENT_ID,
-  secret: process.env.GOOGLE_CLIENT_SECRET ? "loaded" : "missing",
-  redirectUri: process.env.GOOGLE_REDIRECT_URI
-});
+dotenv.config();  // make sure this runs before using process.env
 
 export const oAuth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,

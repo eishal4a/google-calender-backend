@@ -7,10 +7,13 @@ import { savedTokens } from "./auth.js"; // import the saved tokens
 const router = express.Router();
 
 
-// inside any Google API call:
+const { tokens } = await oAuth2Client.getToken(code);
+oAuth2Client.setCredentials(tokens);
+savedTokens = tokens;
 if (savedTokens) {
   oAuth2Client.setCredentials(savedTokens);
 }
+
 
 oAuth2Client.setCredentials(savedTokens);
 
