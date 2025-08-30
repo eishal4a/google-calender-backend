@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import eventsRoute from "./routes/events.js";
 import authRoute from "./routes/auth.js";
-app.use("/api/auth", authRoute);
 
 dotenv.config();
 
@@ -12,18 +11,19 @@ app.use(express.json());
 
 // connect DB
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB error:", err));
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB error:", err));
 
 // test route
 app.get("/", (req, res) => {
-  res.send("Backend running + Mongo connected");
+  res.send("🚀 Backend running + Mongo connected");
 });
 
-// use events API
+// use routes
+app.use("/api/auth", authRoute);
 app.use("/api/events", eventsRoute);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
