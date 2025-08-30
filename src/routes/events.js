@@ -2,13 +2,21 @@ import express from "express";
 import Event from "../models/Event.js";
 import { google } from "googleapis";
 import { oAuth2Client } from "../utils/googleApi.js";
-
+import { savedTokens } from "./auth.js";  // 👈 import saved tokens
 
 const router = express.Router();
 
+// --- Helper: Get authenticated calendar client ---
+function getCalendar() {
+  if (savedTokens) {
+    oAuth2Client.setCredentials(savedTokens); // 👈 attach tokens
+  }
+  return google.calendar({ version: "v3", auth: oAuth2Client });
+}
+
 // --- Helper: Create event in Google Calendar ---
 async function createGoogleEvent(event) {
-  const calendar = google.calendar({ version: "v3", auth: oAuth2Client });
+  const calendar = getCalendar();
   const gEvent = {
     summary: event.title,
     description: event.description,
@@ -25,7 +33,7 @@ async function createGoogleEvent(event) {
 
 // --- Helper: Delete event in Google Calendar ---
 async function deleteGoogleEvent(googleId) {
-  const calendar = google.calendar({ version: "v3", auth: oAuth2Client });
+  const calendar = getCalendar();
   await calendar.events.delete({
     calendarId: "primary",
     eventId: googleId,
@@ -41,7 +49,7 @@ router.get("/", async (req, res) => {
     // Get from Google
     let googleEvents = [];
     try {
-      const calendar = google.calendar({ version: "v3", auth: oAuth2Client });
+      const calendar = getCalendar();
       const response = await calendar.events.list({
         calendarId: "primary",
         maxResults: 50,
