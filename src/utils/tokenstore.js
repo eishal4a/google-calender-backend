@@ -1,12 +1,11 @@
+// utils/tokenStore.js
+let storedTokens = null;
 
-import mongoose from "mongoose";
+export function saveTokens(tokens) {
+  storedTokens = tokens;
+  console.log("💾 Tokens saved:", Object.keys(tokens));
+}
 
-const tokenSchema = new mongoose.Schema({
-  access_token: String,
-  refresh_token: String,
-  scope: String,
-  token_type: String,
-  expiry_date: Number
-});
-
-export default mongoose.model("GoogleToken", tokenSchema);
+export function getTokens() {
+  return storedTokens;
+}
