@@ -112,10 +112,8 @@ router.post("/", async (req, res) => {
 // ✅ Delete event (Mongo + Google)
 router.delete("/:id", async (req, res) => {
   try {
-    // Delete from Mongo
     await Event.findByIdAndDelete(req.params.id);
 
-    // Delete from Google if it's a Google event
     try {
       await deleteGoogleEvent(req.params.id);
     } catch (err) {
