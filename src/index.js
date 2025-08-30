@@ -2,6 +2,8 @@ import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import eventsRoute from "./routes/events.js";
+import authRoute from "./routes/auth.js";
+app.use("/api/auth", authRoute);
 
 dotenv.config();
 
