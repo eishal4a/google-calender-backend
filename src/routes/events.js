@@ -5,6 +5,10 @@ import { oAuth2Client } from "../utils/googleApi.js";
 import { savedTokens } from "./auth.js";  // 👈 import saved tokens
 
 const router = express.Router();
+if (!savedTokens) {
+  throw new Error("No Google account connected. Please login via /api/auth/google");
+}
+oAuth2Client.setCredentials(savedTokens);
 
 // --- Helper: Get authenticated calendar client ---
 function getCalendar() {
