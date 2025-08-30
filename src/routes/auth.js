@@ -1,10 +1,9 @@
 import express from "express";
-import { oAuth2Client } from "../utils/googleApi.js";
+import { oAuth2Client, setTokens } from "../utils/googleApi.js";
 
 const router = express.Router();
 
 router.get("/google", (req, res) => {
-  console.log("CLIENT ID:", process.env.GOOGLE_CLIENT_ID); // 👈 Add this
   const url = oAuth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
@@ -20,8 +19,8 @@ router.get("/google/callback", async (req, res) => {
   try {
     const { code } = req.query;
     const { tokens } = await oAuth2Client.getToken(code);
-    oAuth2Client.setCredentials(tokens);
-    res.send("✅ Google Calendar connected successfully");
+    setTokens(tokens); // 👈 Save tokens
+    res.send("✅ Google Calendar connected successfully! You can now add events.");
   } catch (err) {
     console.error("OAuth Error:", err.message);
     res.status(500).send("❌ Failed to connect Google Calendar");
