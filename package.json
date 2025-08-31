@@ -4,7 +4,8 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
   },
   "dependencies": {
     "axios": "^1.11.0",
@@ -14,7 +15,8 @@
     "express-session": "^1.18.2",
     "googleapis": "^159.0.0",
     "mongod": "^2.0.0",
-    "mongoose": "^7.0.0"
+    "mongoose": "^7.0.0",
+    "node-cron": "^4.2.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
