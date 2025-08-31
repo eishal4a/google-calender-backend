@@ -16,10 +16,10 @@ router.get("/google", (req, res) => {
       "email",
       "profile"
     ],
-    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI, // <--- THIS MUST MATCH Google Cloud Console
   });
 
-  res.redirect(authUrl); // redirect user to Google login page
+  res.redirect(authUrl);
 });
 
 // STEP 2: OAuth callback
