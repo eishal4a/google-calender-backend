@@ -12,7 +12,7 @@ app.use(express.json());
 
 // ✅ CORS setup
 app.use(cors({
-  origin: "https://sync-my-calendar.vercel.app", // your frontend URL
+  origin: "https://sync-my-calendar.vercel.app", 
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
 }));
