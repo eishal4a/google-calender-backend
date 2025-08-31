@@ -1,113 +1,105 @@
 import express from "express";
 import Event from "../models/Event.js";
 import { google } from "googleapis";
-import { oAuth2Client } from "../utils/googleApi.js";
-import { getTokens } from "../utils/tokenStore.js";
 
 const router = express.Router();
 
-// --- Helper: Get Calendar with valid tokens ---
-async function getCalendar() {
-  const tokens = await getTokens();
-  if (!tokens) throw new Error("No Google tokens available. Please connect Google Calendar first.");
-  oAuth2Client.setCredentials(tokens);
-  return google.calendar({ version: "v3", auth: oAuth2Client });
-}
 
-// --- Helper: Create event in Google Calendar ---
-async function createGoogleEvent(event) {
-  const calendar = await getCalendar();
-  const gEvent = {
-    summary: event.title,
-    description: event.description,
-    start: { dateTime: event.start },
-    end: { dateTime: event.end },
-  };
-  const res = await calendar.events.insert({
-    calendarId: "primary",
-    resource: gEvent,
-  });
-  return res.data;
-}
-
-// --- Helper: Delete event in Google Calendar ---
-async function deleteGoogleEvent(googleId) {
-  const calendar = await getCalendar();
-  await calendar.events.delete({
-    calendarId: "primary",
-    eventId: googleId,
-  });
-}
-
-// --- Get all events (Mongo + Google) ---
+// ✅ GET all events
 router.get("/", async (req, res) => {
   try {
-    const mongoEvents = await Event.find();
-
-    let googleEvents = [];
-    try {
-      const calendar = await getCalendar();
-      const response = await calendar.events.list({
-        calendarId: "primary",
-        maxResults: 50,
-        singleEvents: true,
-        orderBy: "startTime",
-      });
-
-      googleEvents = response.data.items.map((e) => ({
-        _id: e.id,
-        title: e.summary,
-        description: e.description,
-        start: e.start.dateTime || e.start.date,
-        end: e.end.dateTime || e.end.date,
-        source: "google",
-      }));
-    } catch (err) {
-      console.error("Google fetch error:", err.message);
-    }
-
-    res.json([...mongoEvents, ...googleEvents]);
+    const events = await Event.find({});
+    res.json(events);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Fetch events error:", err);
+    res.status(500).json({ error: "Failed to fetch events" });
   }
 });
 
-// --- Add new event (Mongo + Google) ---
+
+// ✅ POST (Create Event + Sync with Google)
 router.post("/", async (req, res) => {
+  const accessToken = req.headers.authorization?.split(" ")[1];
+  if (!accessToken) return res.status(401).json({ error: "Missing access token" });
+
+  const eventData = req.body;
+
   try {
-    const { title, description, start, end } = req.body;
+    // Setup Google OAuth2
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
 
-    const newEvent = new Event({ title, description, start, end });
-    await newEvent.save();
+    const calendar = google.calendar({ version: "v3", auth });
 
-    let googleEvent = null;
-    try {
-      googleEvent = await createGoogleEvent(newEvent);
-    } catch (err) {
-      console.error("Google create error:", err.message);
-    }
+    // ✅ Validate attendees (only allow valid emails)
+    const attendees =
+      eventData.guests
+        ?.split(",")
+        .map(email => email.trim())
+        .filter(email => /\S+@\S+\.\S+/.test(email)) // regex for valid emails
+        .map(email => ({ email }));
 
-    res.json({ ...newEvent._doc, googleId: googleEvent?.id });
+    // ✅ Create event in Google Calendar
+    const gcalEvent = await calendar.events.insert({
+      calendarId: "primary",
+      requestBody: {
+        summary: eventData.title,
+        description: eventData.description,
+        start: { dateTime: eventData.start },
+        end: { dateTime: eventData.end },
+        location: eventData.location,
+        ...(attendees?.length ? { attendees } : {}), // add only if not empty
+      },
+    });
+
+    // ✅ Save to MongoDB with googleEventId
+    const newEvent = new Event({ ...eventData, googleEventId: gcalEvent.data.id });
+    const savedEvent = await newEvent.save();
+
+    res.status(201).json(savedEvent);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Backend error:", err);
+    res.status(500).json({ error: "Failed to save event" });
   }
 });
 
-// --- Delete event (Mongo + Google) ---
+
+// ✅ DELETE event (works for MongoDB _id or Google eventId)
 router.delete("/:id", async (req, res) => {
-  try {
-    await Event.findByIdAndDelete(req.params.id);
+  const accessToken = req.headers.authorization?.split(" ")[1];
+  const id = req.params.id;
 
-    try {
-      await deleteGoogleEvent(req.params.id);
-    } catch (err) {
-      console.warn("Google delete error (probably not a Google event):", err.message);
+  try {
+    // Try MongoDB _id
+    let event = await Event.findById(id);
+
+    // If not found, try googleEventId
+    if (!event) {
+      event = await Event.findOne({ googleEventId: id });
+      if (!event) return res.status(404).json({ error: "Event not found" });
     }
 
-    res.json({ message: "Event deleted" });
+    // Delete from Google Calendar if linked
+    if (accessToken && event.googleEventId) {
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({ access_token: accessToken });
+
+      const calendar = google.calendar({ version: "v3", auth });
+      await calendar.events.delete({
+        calendarId: "primary",
+        eventId: event.googleEventId
+      });
+    }
+
+    // Delete from MongoDB
+    await Event.findByIdAndDelete(event._id);
+
+    res.json({ message: "Event deleted successfully" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Delete event error:", err);
+    res.status(500).json({ error: "Failed to delete event" });
   }
 });
+
 
 export default router;

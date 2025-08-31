@@ -1,6 +1,7 @@
-import { google } from "googleapis";
 import dotenv from "dotenv";
-dotenv.config();
+import { google } from "googleapis";
+
+dotenv.config(); // <-- Make sure this is here
 
 export const oAuth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -10,5 +11,5 @@ export const oAuth2Client = new google.auth.OAuth2(
 
 console.log("Google OAuth Setup:", {
   clientId: process.env.GOOGLE_CLIENT_ID ? "✅ Loaded" : "❌ Missing",
-  redirect: process.env.GOOGLE_REDIRECT_URI
+  redirect: process.env.GOOGLE_REDIRECT_URI,
 });

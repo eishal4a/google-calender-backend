@@ -1,37 +1,32 @@
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import cors from "cors";                 // <-- add CORS
+import cors from "cors";
 import eventsRoute from "./routes/events.js";
-import authRoute from "./routes/auth.js";  
+import authRoute from "./routes/auth.js";
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-// ✅ CORS setup
 app.use(cors({
-  origin: "http://localhost:5173/", 
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true,
+  origin: "http://localhost:5173",
+  credentials: true
 }));
 
-// DB connection
+// ----------------- MongoDB Connection -----------------
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB error:", err));
 
-// Test route
-app.get("/", (req, res) => {
-  res.send("🚀 Backend running + Mongo connected");
-});
-
-// Routes
+// ----------------- Routes -----------------
 app.use("/api/auth", authRoute);
 app.use("/api/events", eventsRoute);
 
+// ----------------- Test Route -----------------
+app.get("/", (req, res) => res.send("🚀 Backend running"));
+
+// ----------------- Server -----------------
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
