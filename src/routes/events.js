@@ -4,95 +4,118 @@ import { google } from "googleapis";
 
 const router = express.Router();
 
-
-// ✅ GET all events
+// GET all events (MongoDB + Google)
 router.get("/", async (req, res) => {
   try {
     const events = await Event.find({});
-    res.json(events);
+    const accessToken = req.headers.authorization?.split(" ")[1];
+    let gcalEvents = [];
+
+    if (accessToken) {
+      try {
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: accessToken });
+        const calendar = google.calendar({ version: "v3", auth });
+        const gcalRes = await calendar.events.list({ calendarId: "primary" });
+
+        gcalEvents = gcalRes.data.items.map((e) => ({
+          _id: `gcal_${e.id}`,
+          title: e.summary,
+          description: e.description,
+          location: e.location,
+          start: new Date(e.start.dateTime || e.start.date),
+          end: new Date(e.end.dateTime || e.end.date),
+          color: "#34A853",
+          googleEventId: e.id,
+        }));
+      } catch (err) {
+        console.error("Google fetch error:", err);
+      }
+    }
+
+    res.json([...events, ...gcalEvents]);
   } catch (err) {
     console.error("Fetch events error:", err);
     res.status(500).json({ error: "Failed to fetch events" });
   }
 });
 
-
-// ✅ POST (Create Event + Sync with Google)
+// POST create event + sync with Google
 router.post("/", async (req, res) => {
-  const accessToken = req.headers.authorization?.split(" ")[1];
-  if (!accessToken) return res.status(401).json({ error: "Missing access token" });
-
   const eventData = req.body;
+  const accessToken = req.headers.authorization?.split(" ")[1];
 
   try {
-    // Setup Google OAuth2
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: accessToken });
+    let googleEventId = null;
 
-    const calendar = google.calendar({ version: "v3", auth });
+    if (accessToken) {
+      try {
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: accessToken });
+        const calendar = google.calendar({ version: "v3", auth });
 
-    // ✅ Validate attendees (only allow valid emails)
-    const attendees =
-      eventData.guests
-        ?.split(",")
-        .map(email => email.trim())
-        .filter(email => /\S+@\S+\.\S+/.test(email)) // regex for valid emails
-        .map(email => ({ email }));
+        const attendees =
+          eventData.guests
+            ?.split(",")
+            .map((email) => email.trim())
+            .filter((email) => /\S+@\S+\.\S+/.test(email))
+            .map((email) => ({ email }));
 
-    // ✅ Create event in Google Calendar
-    const gcalEvent = await calendar.events.insert({
-      calendarId: "primary",
-      requestBody: {
-        summary: eventData.title,
-        description: eventData.description,
-        start: { dateTime: eventData.start },
-        end: { dateTime: eventData.end },
-        location: eventData.location,
-        ...(attendees?.length ? { attendees } : {}), // add only if not empty
-      },
-    });
+        const gcalEvent = await calendar.events.insert({
+          calendarId: "primary",
+          requestBody: {
+            summary: eventData.title,
+            description: eventData.description,
+            start: { dateTime: eventData.start },
+            end: { dateTime: eventData.end },
+            location: eventData.location,
+            ...(attendees?.length ? { attendees } : {}),
+          },
+        });
 
-    // ✅ Save to MongoDB with googleEventId
-    const newEvent = new Event({ ...eventData, googleEventId: gcalEvent.data.id });
+        googleEventId = gcalEvent.data.id;
+      } catch (err) {
+        console.error("Google insert error:", err);
+      }
+    }
+
+    const newEvent = new Event({ ...eventData, googleEventId });
     const savedEvent = await newEvent.save();
 
     res.status(201).json(savedEvent);
   } catch (err) {
-    console.error("Backend error:", err);
+    console.error("Create event error:", err);
     res.status(500).json({ error: "Failed to save event" });
   }
 });
 
-
-// ✅ DELETE event (works for MongoDB _id or Google eventId)
+// DELETE event (MongoDB + Google)
 router.delete("/:id", async (req, res) => {
-  const accessToken = req.headers.authorization?.split(" ")[1];
   const id = req.params.id;
+  const accessToken = req.headers.authorization?.split(" ")[1];
 
   try {
-    // Try MongoDB _id
-    let event = await Event.findById(id);
+    const event = await Event.findById(id);
+    const googleEventId = event?.googleEventId || (id.startsWith("gcal_") ? id.replace("gcal_", "") : null);
 
-    // If not found, try googleEventId
-    if (!event) {
-      event = await Event.findOne({ googleEventId: id });
-      if (!event) return res.status(404).json({ error: "Event not found" });
+    if (!event && !googleEventId) {
+      return res.status(404).json({ error: "Event not found" });
     }
 
-    // Delete from Google Calendar if linked
-    if (accessToken && event.googleEventId) {
-      const auth = new google.auth.OAuth2();
-      auth.setCredentials({ access_token: accessToken });
-
-      const calendar = google.calendar({ version: "v3", auth });
-      await calendar.events.delete({
-        calendarId: "primary",
-        eventId: event.googleEventId
-      });
+    // Delete from Google Calendar
+    if (googleEventId && accessToken) {
+      try {
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: accessToken });
+        const calendar = google.calendar({ version: "v3", auth });
+        await calendar.events.delete({ calendarId: "primary", eventId: googleEventId });
+      } catch (err) {
+        console.error("Google delete error:", err);
+      }
     }
 
     // Delete from MongoDB
-    await Event.findByIdAndDelete(event._id);
+    if (event) await Event.findByIdAndDelete(event._id);
 
     res.json({ message: "Event deleted successfully" });
   } catch (err) {
@@ -100,6 +123,5 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete event" });
   }
 });
-
 
 export default router;
