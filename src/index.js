@@ -1,13 +1,21 @@
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import cors from "cors";                 // <-- add CORS
 import eventsRoute from "./routes/events.js";
-import authRoute from "./routes/auth.js";   // make sure lowercase "auth.js"
+import authRoute from "./routes/auth.js";  
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
+
+// ✅ CORS setup
+app.use(cors({
+  origin: "https://sync-my-calendar.vercel.app", // your frontend URL
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+}));
 
 // DB connection
 mongoose.connect(process.env.MONGO_URI)
@@ -27,4 +35,3 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
 });
-
