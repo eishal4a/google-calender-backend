@@ -43,7 +43,7 @@ router.get("/google/callback", async (req, res) => {
 
     // Redirect frontend with access token and user info
     res.redirect(
-      `https://your-frontend-url/?access_token=${tokens.access_token}&user=${encodeURIComponent(
+      `https://sync-my-calendar.vercel.app/?access_token=${tokens.access_token}&user=${encodeURIComponent(
         JSON.stringify(userInfo.data)
       )}`
     );
