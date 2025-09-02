@@ -4,6 +4,7 @@ import { oAuth2Client } from "../utils/googleApi.js";
 import { saveTokens, getTokens } from "../utils/tokenStore.js";
 
 const router = express.Router();
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://google-calender-xi.vercel.app/";
 
 // -----------------------------
 // STEP 1: Start OAuth flow
@@ -21,7 +22,7 @@ router.get("/google", (req, res) => {
     redirect_uri: process.env.GOOGLE_REDIRECT_URI,
   });
 
-  res.redirect(authUrl); // redirect user to Google login page
+  res.redirect(authUrl);
 });
 
 // -----------------------------
@@ -35,7 +36,7 @@ router.get("/google/callback", async (req, res) => {
     // Exchange code for tokens
     const { tokens } = await oAuth2Client.getToken(code);
     oAuth2Client.setCredentials(tokens);
-    saveTokens(tokens); // save tokens for future API calls
+    saveTokens(tokens);
 
     // Get user profile info
     const oauth2 = google.oauth2({ version: "v2", auth: oAuth2Client });
@@ -43,15 +44,50 @@ router.get("/google/callback", async (req, res) => {
 
     console.log("✅ Google Calendar connected successfully");
 
-    // Redirect frontend with access token and user info
+    // -----------------------------
+    // STEP 3: Register push notifications
+    // -----------------------------
+    try {
+      const calendar = google.calendar({ version: "v3", auth: oAuth2Client });
+
+      // unique channel ID
+      const channelId = `${userInfo.data.id}-${Date.now()}`;
+
+      // webhook (must be your backend URL with HTTPS)
+      const webhookAddress =
+        process.env.WEBHOOK_URL ||
+        "https://<YOUR_BACKEND_URL>/api/notifications/google/webhook"
+;
+
+      const watchResponse = await calendar.events.watch({
+        calendarId: "primary",
+        requestBody: {
+          id: channelId,
+          type: "web_hook",
+          address: webhookAddress,
+        },
+      });
+
+      console.log("📡 Push channel created:", watchResponse.data);
+    } catch (watchErr) {
+      console.error("❌ Failed to set up push notifications:", watchErr);
+    }
+
+    // Redirect frontend with token + user info
+    const FRONTEND_URL =
+      process.env.FRONTEND_URL ||
+      (process.env.REPL_SLUG && process.env.REPL_OWNER
+        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+        : "https://google-calender-xi.vercel.app/");
+
     res.redirect(
-      `http://localhost:5173/?access_token=${tokens.access_token}&user=${encodeURIComponent(
+      `${FRONTEND_URL}/?access_token=${tokens.access_token}&user=${encodeURIComponent(
         JSON.stringify(userInfo.data)
       )}`
     );
   } catch (err) {
-    console.error("OAuth Error:", err);
-    res.status(500).send("❌ Failed to connect Google Calendar");
+    console.error("Auth error:", err);
+    res.status(500).send("Authentication failed");
   }
 });
 
@@ -62,8 +98,9 @@ router.delete("/google/events/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const tokens = getTokens(); // fetch saved tokens
-    if (!tokens) return res.status(401).json({ error: "No Google tokens found" });
+    const tokens = getTokens();
+    if (!tokens)
+      return res.status(401).json({ error: "No Google tokens found" });
 
     oAuth2Client.setCredentials(tokens);
 
